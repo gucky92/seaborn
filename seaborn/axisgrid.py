@@ -7,6 +7,7 @@ import pandas as pd
 from scipy import stats
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 
 from . import utils
 from .palettes import color_palette, blend_palette
@@ -229,7 +230,7 @@ class FacetGrid(Grid):
                  row_order=None, col_order=None, hue_order=None, hue_kws=None,
                  dropna=True, legend_out=True, despine=True,
                  margin_titles=False, xlim=None, ylim=None, subplot_kws=None,
-                 gridspec_kws=None, size=None):
+                 gridspec_kws=None, size=None, fig=None, subplot_spec=None):
 
         # Handle deprecations
         if size is not None:
@@ -305,7 +306,53 @@ class FacetGrid(Grid):
             subplot_kws["ylim"] = ylim
 
         # Initialize the subplot grid
-        if col_wrap is None:
+        if fig is not None and subplot_spec is not None:
+            g = gridspec.GridSpecFromSubplotSpec(
+                nrow, ncol,
+                subplot_spec=subplot_spec,
+                **gridspec_kws
+            )
+
+            axes = np.empty((nrow, ncol), object)
+
+            for irow in range(nrow):
+                for icol in range(ncol):
+
+                    # sharex
+                    if sharex == 'row' and icol > 0:
+                        subplot_kws['sharex'] = axes[irow, 0]
+                    elif sharex == 'col' and irow > 0:
+                        subplot_kws['sharex'] = axes[0, icol]
+                    elif sharex and ((irow > 0) or (icol > 0)):
+                        subplot_kws['sharex'] = axes[0, 0]
+                    else:
+                        subplot_kws['sharex'] = None
+
+                    # sharey
+                    if sharey == 'row' and icol > 0:
+                        subplot_kws['sharey'] = axes[irow, 0]
+                    elif sharey == 'col' and irow > 0:
+                        subplot_kws['sharey'] = axes[0, icol]
+                    elif sharey and ((irow > 0) or (icol > 0)):
+                        subplot_kws['sharey'] = axes[0, 0]
+                    else:
+                        subplot_kws['sharey'] = None
+
+                    axes[irow, icol] = plt.Subplot(
+                        fig, g[irow, icol], **subplot_kws)
+
+                    fig.add_subplot(axes[irow, icol])
+
+            if col_wrap:
+                # concatenate axes if col_wrap
+                axes = np.concatenate(axes)
+                # delete unnecessary axes
+                for ax in axes[len(col_names):]:
+                    fig.delaxes(ax)
+                axes = axes[:len(col_names)]
+
+            self.axes = axes
+        elif col_wrap is None:
             kwargs = dict(figsize=figsize, squeeze=False,
                           sharex=sharex, sharey=sharey,
                           subplot_kw=subplot_kws,
