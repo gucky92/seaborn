@@ -748,6 +748,22 @@ class _LinePlotter(_RelationalPlotter):
             cis = pd.DataFrame(np.c_[est - sd, est + sd],
                                index=est.index,
                                columns=["low", "high"]).stack()
+        elif ci == 'sem':
+            sd = grouped.sem()
+            cis = pd.DataFrame(np.c_[est - sd, est + sd],
+                               index=est.index,
+                               columns=["low", "high"]).stack()
+        elif hasattr(ci, '__call__'):
+            _output = ci(np.random.random(10))
+            sd = grouped.apply(ci)
+            if hasattr(_output, '__iter__'):
+                cis = pd.DataFrame(np.array(list(sd)),
+                                   index=est.index,
+                                   columns=["low", "high"]).stack()
+            else:
+                cis = pd.DataFrame(np.c_[est - sd, est + sd],
+                                   index=est.index,
+                                   columns=["low", "high"]).stack()
         else:
             cis = grouped.apply(bootstrapped_cis)
 
