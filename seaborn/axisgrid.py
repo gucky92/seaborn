@@ -1,6 +1,7 @@
 from itertools import product
 import warnings
 from textwrap import dedent
+from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
@@ -71,10 +72,13 @@ class Grid(object):
         blank_handle = mpl.patches.Patch(alpha=0, linewidth=0)
         handles = [legend_data.get(l, blank_handle) for l in label_order]
         title = self._hue_var if title is None else title
-        try:
-            title_size = mpl.rcParams["axes.labelsize"] * .85
-        except TypeError:  # labelsize is something like "large"
-            title_size = mpl.rcParams["axes.labelsize"]
+        if LooseVersion(mpl.__version__) < LooseVersion("3.0"):
+            try:
+                title_size = mpl.rcParams["axes.labelsize"] * .85
+            except TypeError:  # labelsize is something like "large"
+                title_size = mpl.rcParams["axes.labelsize"]
+        else:
+            title_size = mpl.rcParams["legend.title_fontsize"]
 
         # Unpack nested labels from a hierarchical legend
         labels = []
@@ -443,9 +447,10 @@ class FacetGrid(Grid):
 
         When using seaborn functions that infer semantic mappings from a
         dataset, care must be taken to synchronize those mappings across
-        facets. In most cases, it will be better to use a figure-level function
-        (e.g. :func:`relplot` or :func:`catplot`) than to use
-        :class:`FacetGrid` directly.
+        facets (e.g., by defing the ``hue`` mapping with a palette dict or
+        setting the data type of the variables to ``category``). In most cases,
+        it will be better to use a figure-level function (e.g. :func:`relplot`
+        or :func:`catplot`) than to use :class:`FacetGrid` directly.
 
         The basic workflow is to initialize the :class:`FacetGrid` object with
         the dataset and the variables that are used to structure the grid. Then
