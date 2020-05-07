@@ -162,6 +162,11 @@ class _SubplotSpecHandler:
         ax : matplotlib.pyplot.Axis
         """
 
+        if self._reserved:
+            raise RuntimeError(
+                'grid or plot for selected figure subplot already created.'
+            )
+
         g = gridspec.GridSpecFromSubplotSpec(
             1, 1,
             subplot_spec=self._subplot_spec
@@ -186,6 +191,11 @@ class _SubplotSpecHandler:
         -------
         axes : array of matplotlib.pyplot.Axis
         """
+
+        if self._reserved:
+            raise RuntimeError(
+                'grid or plot for selected figure subplot already created.'
+            )
 
         g = gridspec.GridSpecFromSubplotSpec(
             nrows=nrows, ncols=ncols,
