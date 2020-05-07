@@ -1162,7 +1162,8 @@ class PairGrid(Grid):
     def __init__(self, data, hue=None, hue_order=None, palette=None,
                  hue_kws=None, vars=None, x_vars=None, y_vars=None,
                  corner=False, diag_sharey=True, height=2.5, aspect=1,
-                 layout_pad=0, despine=True, dropna=True, size=None):
+                 layout_pad=0, despine=True, dropna=True, size=None,
+                 fig=None, subplot_spec=None):
         """Initialize the plot figure and PairGrid object.
 
         Parameters
@@ -1334,12 +1335,39 @@ class PairGrid(Grid):
         self.square_grid = self.x_vars == self.y_vars
 
         # Create the figure and the array of subplots
-        figsize = len(x_vars) * height * aspect, len(y_vars) * height
+        if fig is None or subplot_spec is None:
+            figsize = len(x_vars) * height * aspect, len(y_vars) * height
 
-        fig, axes = plt.subplots(len(y_vars), len(x_vars),
-                                 figsize=figsize,
-                                 sharex="col", sharey="row",
-                                 squeeze=False)
+            fig, axes = plt.subplots(len(y_vars), len(x_vars),
+                                     figsize=figsize,
+                                     sharex="col", sharey="row",
+                                     squeeze=False)
+        else:
+            g = gridspec.GridSpecFromSubplotSpec(
+                len(y_vars), len(x_vars),
+                subplot_spec=subplot_spec
+            )
+
+            axes = np.empty((len(y_vars), len(x_vars)), object)
+
+            for irow in range(len(y_vars)):
+                for icol in range(len(x_vars)):
+
+                    subplot_kws = {}
+                    if irow > 0:
+                        subplot_kws['sharex'] = axes[0, icol]
+                    else:
+                        subplot_kws['sharex'] = None
+
+                    if icol > 0:
+                        subplot_kws['sharey'] = axes[irow, 0]
+                    else:
+                        subplot_kws['sharey'] = None
+
+                    axes[irow, icol] = plt.Subplot(
+                        fig, g[irow, icol], **subplot_kws)
+
+                    fig.add_subplot(axes[irow, icol])
 
         # Possibly remove upper axes to make a corner grid
         # Note: setting up the axes is usually the most time-intensive part
@@ -1609,7 +1637,8 @@ class JointGrid(object):
     """Grid for drawing a bivariate plot with marginal univariate plots."""
 
     def __init__(self, x, y, data=None, height=6, ratio=5, space=.2,
-                 dropna=True, xlim=None, ylim=None, size=None):
+                 dropna=True, xlim=None, ylim=None, size=None,
+                 fig=None, subplot_spec=None):
         """Set up the grid of subplots.
 
         Parameters
@@ -1717,12 +1746,30 @@ class JointGrid(object):
             warnings.warn(msg, UserWarning)
 
         # Set up the subplot grid
-        f = plt.figure(figsize=(height, height))
-        gs = plt.GridSpec(ratio + 1, ratio + 1)
+        if fig is None or subplot_spec is None:
+            f = plt.figure(figsize=(height, height))
+            gs = plt.GridSpec(ratio + 1, ratio + 1)
 
-        ax_joint = f.add_subplot(gs[1:, :-1])
-        ax_marg_x = f.add_subplot(gs[0, :-1], sharex=ax_joint)
-        ax_marg_y = f.add_subplot(gs[1:, -1], sharey=ax_joint)
+            ax_joint = f.add_subplot(gs[1:, :-1])
+            ax_marg_x = f.add_subplot(gs[0, :-1], sharex=ax_joint)
+            ax_marg_y = f.add_subplot(gs[1:, -1], sharey=ax_joint)
+        else:
+            f = fig
+            gs = gridspec.GridSpecFromSubplotSpec(
+                ratio + 1,
+                ratio + 1,
+                subplot_spec=subplot_spec,
+                wspace=space,
+                hspace=space
+            )
+
+            ax_joint = plt.Subplot(f, gs[1:, :-1])
+            ax_marg_x = plt.Subplot(f, gs[0, :-1], sharex=ax_joint)
+            ax_marg_y = plt.Subplot(f, gs[1:, -1], sharey=ax_joint)
+
+            f.add_subplot(ax_joint)
+            f.add_subplot(ax_marg_x)
+            f.add_subplot(ax_marg_y)
 
         self.fig = f
         self.ax_joint = ax_joint
@@ -1780,11 +1827,12 @@ class JointGrid(object):
             ax_joint.set_ylim(ylim)
 
         # Make the grid look nice
-        utils.despine(f)
+        utils.despine(ax=ax_joint)
         utils.despine(ax=ax_marg_x, left=True)
         utils.despine(ax=ax_marg_y, bottom=True)
-        f.tight_layout()
-        f.subplots_adjust(hspace=space, wspace=space)
+        if fig is None and subplot_spec is None:
+            f.tight_layout()
+            f.subplots_adjust(hspace=space, wspace=space)
 
     def plot(self, joint_func, marginal_func, annot_func=None):
         """Shortcut to draw the full plot.
