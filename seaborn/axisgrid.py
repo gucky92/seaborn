@@ -22,6 +22,7 @@ class Grid(object):
     """Base class for grids of subplots."""
     _margin_titles = False
     _legend_out = True
+    _subplot_spec = None
 
     def set(self, **kwargs):
         """Set attributes on each subplot Axes."""
@@ -237,6 +238,9 @@ class FacetGrid(Grid):
                  gridspec_kws=None, size=None,
                  or_rowcol=False, fig=None, subplot_spec=None):
 
+        assert not (subplot_spec is not None and fig is None), \
+            'provide figure if providing subplot_spec'
+
         # Handle deprecations
         if size is not None:
             height = size
@@ -383,18 +387,6 @@ class FacetGrid(Grid):
                 axes[i] = fig.add_subplot(nrow, ncol, i + 1, **subplot_kws)
             self.axes = axes
 
-            # Now we turn off labels on the inner axes
-            if sharex:
-                for ax in self._not_bottom_axes:
-                    for label in ax.get_xticklabels():
-                        label.set_visible(False)
-                    ax.xaxis.offsetText.set_visible(False)
-            if sharey:
-                for ax in self._not_left_axes:
-                    for label in ax.get_yticklabels():
-                        label.set_visible(False)
-                    ax.yaxis.offsetText.set_visible(False)
-
         # Set up the class attributes
         # ---------------------------
 
@@ -426,11 +418,25 @@ class FacetGrid(Grid):
         self._dropna = dropna
         self._not_na = not_na
         self._or_rowcol = or_rowcol
+        self._subplot_spec = subplot_spec
 
         # Make the axes look good
-        fig.tight_layout()
+        if subplot_spec is None:
+            fig.tight_layout()
         if despine:
             self.despine()
+
+        # Now we turn off labels on the inner axes
+        if sharex:
+            for ax in self._not_bottom_axes:
+                for label in ax.get_xticklabels():
+                    label.set_visible(False)
+                ax.xaxis.offsetText.set_visible(False)
+        if sharey:
+            for ax in self._not_left_axes:
+                for label in ax.get_yticklabels():
+                    label.set_visible(False)
+                ax.yaxis.offsetText.set_visible(False)
 
     __init__.__doc__ = dedent("""\
         Initialize the matplotlib figure and FacetGrid object.
@@ -905,7 +911,8 @@ class FacetGrid(Grid):
         """Finalize the annotations and layout."""
         self.set_axis_labels(*axlabels)
         self.set_titles()
-        self.fig.tight_layout()
+        if self._subplot_spec is None:
+            self.fig.tight_layout()
 
     def facet_axis(self, row_i, col_j):
         """Make the axis identified by these indices active and return it."""
@@ -922,7 +929,11 @@ class FacetGrid(Grid):
 
     def despine(self, **kwargs):
         """Remove axis spines from the facets."""
-        utils.despine(self.fig, **kwargs)
+        if self._subplot_spec is None:
+            utils.despine(self.fig, **kwargs)
+        else:
+            for ax in self.axes.ravel():
+                utils.despine(ax=ax, **kwargs)
         return self
 
     def set_axis_labels(self, x_var=None, y_var=None):
@@ -1163,6 +1174,7 @@ class PairGrid(Grid):
                  hue_kws=None, vars=None, x_vars=None, y_vars=None,
                  corner=False, diag_sharey=True, height=2.5, aspect=1,
                  layout_pad=0, despine=True, dropna=True, size=None,
+                 subplot_kws=None, gridspec_kws=None,
                  fig=None, subplot_spec=None):
         """Initialize the plot figure and PairGrid object.
 
@@ -1304,6 +1316,9 @@ class PairGrid(Grid):
 
         """
 
+        assert not (subplot_spec is not None and fig is None), \
+            'provide figure if providing subplot_spec'
+
         # Handle deprecations
         if size is not None:
             height = size
@@ -1334,6 +1349,10 @@ class PairGrid(Grid):
         self.y_vars = list(y_vars)
         self.square_grid = self.x_vars == self.y_vars
 
+        # Build the subplot keyword dictionary
+        subplot_kws = {} if subplot_kws is None else subplot_kws.copy()
+        gridspec_kws = {} if gridspec_kws is None else gridspec_kws.copy()
+
         # Create the figure and the array of subplots
         if fig is None or subplot_spec is None:
             figsize = len(x_vars) * height * aspect, len(y_vars) * height
@@ -1341,11 +1360,14 @@ class PairGrid(Grid):
             fig, axes = plt.subplots(len(y_vars), len(x_vars),
                                      figsize=figsize,
                                      sharex="col", sharey="row",
+                                     gridspec_kw=gridspec_kws,
+                                     subplot_kw=subplot_kws,
                                      squeeze=False)
         else:
             g = gridspec.GridSpecFromSubplotSpec(
                 len(y_vars), len(x_vars),
-                subplot_spec=subplot_spec
+                subplot_spec=subplot_spec,
+                **gridspec_kws
             )
 
             axes = np.empty((len(y_vars), len(x_vars)), object)
@@ -1353,7 +1375,6 @@ class PairGrid(Grid):
             for irow in range(len(y_vars)):
                 for icol in range(len(x_vars)):
 
-                    subplot_kws = {}
                     if irow > 0:
                         subplot_kws['sharex'] = axes[0, icol]
                     else:
@@ -1368,6 +1389,16 @@ class PairGrid(Grid):
                         fig, g[irow, icol], **subplot_kws)
 
                     fig.add_subplot(axes[irow, icol])
+
+            # Now we turn off labels on the inner axes
+            for ax in axes[:-1, :].ravel():
+                for label in ax.get_xticklabels():
+                    label.set_visible(False)
+                ax.xaxis.offsetText.set_visible(False)
+            for ax in axes[:, 1:].ravel():
+                for label in ax.get_yticklabels():
+                    label.set_visible(False)
+                ax.yaxis.offsetText.set_visible(False)
 
         # Possibly remove upper axes to make a corner grid
         # Note: setting up the axes is usually the most time-intensive part
@@ -1391,6 +1422,7 @@ class PairGrid(Grid):
         self.diag_axes = None
 
         self._dropna = dropna
+        self._subplot_spec = subplot_spec
 
         # Label the axes
         self._add_axis_labels()
@@ -1419,7 +1451,8 @@ class PairGrid(Grid):
         if despine:
             self._despine = True
             utils.despine(fig=fig)
-        fig.tight_layout(pad=layout_pad)
+        if subplot_spec is None:
+            fig.tight_layout(pad=layout_pad)
 
     def map(self, func, **kwargs):
         """Plot with the same function in every subplot.
@@ -1638,6 +1671,7 @@ class JointGrid(object):
 
     def __init__(self, x, y, data=None, height=6, ratio=5, space=.2,
                  dropna=True, xlim=None, ylim=None, size=None,
+                 subplot_kws=None, gridspec_kws=None,
                  fig=None, subplot_spec=None):
         """Set up the grid of subplots.
 
@@ -1738,6 +1772,8 @@ class JointGrid(object):
             >>> g = g.plot_marginals(sns.kdeplot, color="m", shade=True)
 
         """
+        assert not (subplot_spec is not None and fig is None), \
+            'provide figure if providing subplot_spec'
         # Handle deprecations
         if size is not None:
             height = size
@@ -1745,27 +1781,40 @@ class JointGrid(object):
                    "please update your code.")
             warnings.warn(msg, UserWarning)
 
+        # Build the subplot keyword dictionary
+        subplot_kws = {} if subplot_kws is None else subplot_kws.copy()
+        gridspec_kws = {} if gridspec_kws is None else gridspec_kws.copy()
+        if xlim is not None:
+            subplot_kws["xlim"] = xlim
+        if ylim is not None:
+            subplot_kws["ylim"] = ylim
+
         # Set up the subplot grid
         if fig is None or subplot_spec is None:
             f = plt.figure(figsize=(height, height))
-            gs = plt.GridSpec(ratio + 1, ratio + 1)
+            gs = plt.GridSpec(ratio + 1, ratio + 1, **gridspec_kws)
 
-            ax_joint = f.add_subplot(gs[1:, :-1])
-            ax_marg_x = f.add_subplot(gs[0, :-1], sharex=ax_joint)
-            ax_marg_y = f.add_subplot(gs[1:, -1], sharey=ax_joint)
+            ax_joint = f.add_subplot(gs[1:, :-1], **subplot_kws)
+            ax_marg_x = f.add_subplot(gs[0, :-1], sharex=ax_joint,
+                                      **subplot_kws)
+            ax_marg_y = f.add_subplot(gs[1:, -1], sharey=ax_joint,
+                                      **subplot_kws)
         else:
             f = fig
+            gridspec_kws['wspace'] = gridspec_kws.get('wspace', space)
+            gridspec_kws['hspace'] = gridspec_kws.get('hspace', space)
             gs = gridspec.GridSpecFromSubplotSpec(
                 ratio + 1,
                 ratio + 1,
                 subplot_spec=subplot_spec,
-                wspace=space,
-                hspace=space
+                **gridspec_kws
             )
 
-            ax_joint = plt.Subplot(f, gs[1:, :-1])
-            ax_marg_x = plt.Subplot(f, gs[0, :-1], sharex=ax_joint)
-            ax_marg_y = plt.Subplot(f, gs[1:, -1], sharey=ax_joint)
+            ax_joint = plt.Subplot(f, gs[1:, :-1], **subplot_kws)
+            ax_marg_x = plt.Subplot(f, gs[0, :-1], sharex=ax_joint,
+                                    **subplot_kws)
+            ax_marg_y = plt.Subplot(f, gs[1:, -1], sharey=ax_joint,
+                                    **subplot_kws)
 
             f.add_subplot(ax_joint)
             f.add_subplot(ax_marg_x)
@@ -1775,6 +1824,8 @@ class JointGrid(object):
         self.ax_joint = ax_joint
         self.ax_marg_x = ax_marg_x
         self.ax_marg_y = ax_marg_y
+
+        self._subplot_spec = subplot_spec
 
         # Turn off tick visibility for the measure axis on the marginal plots
         plt.setp(ax_marg_x.get_xticklabels(), visible=False)
@@ -1830,7 +1881,7 @@ class JointGrid(object):
         utils.despine(ax=ax_joint)
         utils.despine(ax=ax_marg_x, left=True)
         utils.despine(ax=ax_marg_y, bottom=True)
-        if fig is None and subplot_spec is None:
+        if subplot_spec is None:
             f.tight_layout()
             f.subplots_adjust(hspace=space, wspace=space)
 

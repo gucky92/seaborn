@@ -9,6 +9,8 @@ import numpy as np
 import seaborn as sns
 
 
+# TODO padding between subplots
+# TODO padding within subplot grid
 class FacetFigure:
     """
     Construct a figure with single plots and sns.FacetGrid in it.
@@ -38,7 +40,7 @@ class FacetFigure:
 
         self._grid = gridspec.GridSpec(
             nrows, ncols,
-            figure=self.fig, **kwargs
+            figure=self._fig, **kwargs
         )
 
         self._reserved_keys = {}
