@@ -234,7 +234,8 @@ class FacetGrid(Grid):
                  row_order=None, col_order=None, hue_order=None, hue_kws=None,
                  dropna=True, legend_out=True, despine=True,
                  margin_titles=False, xlim=None, ylim=None, subplot_kws=None,
-                 gridspec_kws=None, size=None, fig=None, subplot_spec=None):
+                 gridspec_kws=None, size=None,
+                 or_rowcol=False, fig=None, subplot_spec=None):
 
         # Handle deprecations
         if size is not None:
@@ -424,6 +425,7 @@ class FacetGrid(Grid):
         self._y_var = None
         self._dropna = dropna
         self._not_na = not_na
+        self._or_rowcol = or_rowcol
 
         # Make the axes look good
         fig.tight_layout()
@@ -727,7 +729,10 @@ class FacetGrid(Grid):
         for (i, row), (j, col), (k, hue) in product(enumerate(row_masks),
                                                     enumerate(col_masks),
                                                     enumerate(hue_masks)):
-            data_ijk = data[row & col & hue & self._not_na]
+            if self._or_rowcol:
+                data_ijk = data[(row | col) & hue & self._not_na]
+            else:
+                data_ijk = data[row & col & hue & self._not_na]
             yield (i, j, k), data_ijk
 
     def map(self, func, *args, **kwargs):
