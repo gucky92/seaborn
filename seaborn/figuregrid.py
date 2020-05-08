@@ -17,8 +17,21 @@ from . import utils
 # TODO better padding within subplot grid
 class Figure:
     """
-    Construct a figure with single plots and
-    `FacetGrid`, `PairGrid`, `JointGrid` in it.
+    Construct a figure with single plots, subplots,
+    `FacetGrid` plots, `PairGrid` plots, and `JointGrid` plots.
+
+    Parameters
+    ----------
+    nrows : int, optional
+        Number of rows in the figure grid.
+    ncols : int, optional
+        Number of columns in the figure grid.
+    figsize : two-tuple, optional
+        Size of complete figure.
+    gridspec_kws : dict, optional
+        Arguments passed to `gridspec.GridSpec`.
+    fig_kws: dict, optional
+        Arguments passed to `plt.figure`.
     """
 
     def __init__(
@@ -76,6 +89,13 @@ class Figure:
     def add_panel_letters(self, lower=False, **kwargs):
         """
         Add panel letters to each axis
+
+        Parameters
+        ----------
+        lower : bool, optional
+            Whether panel letters are lowercase. Defaults to False.
+        kwargs : dict, optional
+            Arguments passed to `panel_letter` function.
         """
 
         for idx, ax in enumerate(self.axes):
@@ -111,9 +131,14 @@ class _SubplotSpecHandler:
 
     def add_facetgrid(self, *args, **kwargs):
         """
+        Parameters
+        ----------
+        args, kwargs : tuple, dict
+            Arguments passed to `FacetGrid`.
+
         Returns
         -------
-        g
+        g : `FacetGrid` object
         """
 
         if self._reserved:
@@ -137,9 +162,14 @@ class _SubplotSpecHandler:
 
     def add_pairgrid(self, *args, **kwargs):
         """
+        Parameters
+        ----------
+        args, kwargs : tuple, dict
+            Arguments passed to `PairGrid`.
+
         Returns
         -------
-        g
+        g : `PairGrid` object
         """
 
         if self._reserved:
@@ -163,9 +193,14 @@ class _SubplotSpecHandler:
 
     def add_jointgrid(self, *args, **kwargs):
         """
+        Parameters
+        ----------
+        args, kwargs : tuple, dict
+            Arguments passed to `JointGrid`.
+
         Returns
         -------
-        g
+        g : `JointGrid` object
         """
 
         if self._reserved:
@@ -189,6 +224,13 @@ class _SubplotSpecHandler:
 
     def add_subplot(self, despine=True, **subplot_kws):
         """
+        Parameters
+        ----------
+        despine : bool
+            Whether to apply `despine` to axis.
+        subplot_kws : dict
+            Arguments passed to `plt.Subplot`.
+
         Returns
         -------
         ax : matplotlib.pyplot.Axis
@@ -225,6 +267,17 @@ class _SubplotSpecHandler:
         **subplot_kws
     ):
         """
+        Parameters
+        ----------
+        nrows, ncols, sharex, sharey, squeeze : various
+            Same as those passed to `plt.subplots`
+        wspace, hspace, height_ratios, width_ratios : various
+            Same as those passed to `gridspec.GridSpec`
+        despine : bool
+            Whether to apply `despine` to axis.
+        subplot_kws : dict
+            Arguments passed to each subplot instance.
+
         Returns
         -------
         axes : array of matplotlib.pyplot.Axis
