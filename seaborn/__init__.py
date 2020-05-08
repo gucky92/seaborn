@@ -16,5 +16,6 @@ from .axisgrid import *
 from .widgets import *
 from .colors import xkcd_rgb, crayons
 from . import cm
+from .figuregrid import Figure
 
 __version__ = "0.11.0.dev0"
