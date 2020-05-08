@@ -26,21 +26,15 @@ class Figure:
         nrows=1,
         ncols=1,
         figsize=None,
-        dpi=None,
-        facecolor=None,
-        edgecolor=None,
-        frameon=True,
-        clear=False,
-        **gridspec_kws
+        gridspec_kws=None,
+        **fig_kws
     ):
+
+        gridspec_kws = {} if gridspec_kws is None else gridspec_kws
 
         self._fig = plt.figure(
             figsize=figsize,
-            dpi=dpi,
-            facecolor=facecolor,
-            edgecolor=edgecolor,
-            frameon=frameon,
-            clear=clear
+            **fig_kws
         )
 
         self._grid = gridspec.GridSpec(
