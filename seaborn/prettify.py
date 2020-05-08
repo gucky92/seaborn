@@ -4,6 +4,9 @@
 function to create scalebar
 """
 
+import string
+import matplotlib as mpl
+
 import numpy as np
 import seaborn as sns
 
@@ -12,7 +15,7 @@ def scalebar(
         ax, xsize=None, ysize=None, xunits=None, yunits=None,
         xleft=-0.01, ybottom=-0.01, bottom=False, right=True,
         left=False, top=True, ylim=None, xlim=None,
-        infer_sizes=False, offset=None,
+        infer_sizes=False, infer_units=False, offset=None,
         xformat=False, yformat=False, digits=2,
         **kwargs
         ):
@@ -63,15 +66,10 @@ def scalebar(
         ax.set_xlim(*xlim)
 
     # infer xsize and ysize from ticks
-    if infer_sizes:
-        if xsize is None and infer_sizes != 'infer_y':
-            xticks = ax.get_xticks()
-            xsize = xticks[1] - xticks[0]
-            xsize = siground(xsize, digits=digits)
-        if ysize is None and infer_sizes != 'infer_x':
-            yticks = ax.get_yticks()
-            ysize = yticks[1] - yticks[0]
-            ysize = siground(ysize, digits=digits)
+    xsize, ysize = _infer_sizes(
+        ax, infer_sizes, xsize, ysize, digits)
+    xunits, yunits = _infer_units(
+        ax, infer_units, xunits, yunits, xformat, yformat)
 
     xleft, ybottom = axis_data_coords_sys_transform(ax, xleft, ybottom)
 
@@ -116,6 +114,7 @@ def scalebar(
                     yunits.format(ysize),
                     verticalalignment='center',
                     horizontalalignment='right',
+                    rotation=90,
                     **kwargs
                 )
             else:
@@ -124,6 +123,7 @@ def scalebar(
                     '{} {}'.format(ysize, yunits),
                     verticalalignment='center',
                     horizontalalignment='right',
+                    rotation=90,
                     **kwargs
                 )
         else:
@@ -132,6 +132,7 @@ def scalebar(
                 '{}'.format(ysize),
                 verticalalignment='center',
                 horizontalalignment='right',
+                rotation=90,
                 **kwargs
             )
     sns.despine(
@@ -143,7 +144,41 @@ def scalebar(
         ax.set_xticks([])
     if ysize is not None:
         ax.set_yticks([])
+    if xunits is not None:
+        ax.set_xlabel('')
+    if yunits is not None:
+        ax.set_ylabel('')
     return ax
+
+
+def _infer_sizes(ax, infer_sizes, xsize, ysize, digits):
+    # infer xsize and ysize from ticks
+    if infer_sizes:
+        if xsize is None and infer_sizes != 'infer_y':
+            xticks = ax.get_xticks()
+            xsize = xticks[1] - xticks[0]
+            xsize = siground(xsize, digits=digits)
+        if ysize is None and infer_sizes != 'infer_x':
+            yticks = ax.get_yticks()
+            ysize = yticks[1] - yticks[0]
+            ysize = siground(ysize, digits=digits)
+
+    return xsize, ysize
+
+
+def _infer_units(ax, infer_units, xunits, yunits, xformat, yformat):
+    # infer yunits and xunits from labels
+    if infer_units:
+        if xunits is None and infer_units != 'infer_y':
+            xunits = ax.get_xlabel()
+            if xformat:
+                xunits = '{}' + xunits
+        if yunits is None and infer_units != 'infer_x':
+            yunits = ax.get_ylabel()
+            if yformat:
+                yunits = '{}' + yunits
+
+    return xunits, yunits
 
 
 def axis_data_coords_sys_transform(ax, xin, yin, inverse=False):
@@ -168,11 +203,14 @@ def axis_data_coords_sys_transform(ax, xin, yin, inverse=False):
 
 def panel_letter(
     ax, letter, xpos=-0.1, ypos=1.1,
-    weight='bold', size=20, transform='axes', **kwargs
+    weight='bold', font_scale=1.5, size=None,
+    transform='axes', **kwargs
 ):
     """
     Add a panel letter to a matplotlib.pyplot.axis object.
     """
+    if size is None:
+        size = mpl.rcParams['font.size'] * font_scale
     if transform == 'axes':
         transform = ax.transAxes
     ax.text(
@@ -180,6 +218,19 @@ def panel_letter(
         transform=transform, **kwargs
     )
     return ax
+
+
+def get_letter(idx, lower=False):
+
+    if lower:
+        letters = string.ascii_lowercase
+    else:
+        letters = string.ascii_uppercase
+
+    letter_idx = idx % 26
+    repeats = (idx // 26) + 1
+
+    return letters[letter_idx] * repeats
 
 
 def siground(x, digits):

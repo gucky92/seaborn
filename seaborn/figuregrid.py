@@ -1,4 +1,6 @@
 """
+(c) Matthias Christenson
+
 FacetFigure
 """
 
@@ -6,14 +8,17 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 
-import seaborn as sns
+from .axisgrid import FacetGrid, PairGrid, JointGrid
+from .prettify import get_letter, panel_letter
+from . import utils
 
 
-# TODO padding between subplots
-# TODO padding within subplot grid
-class FacetFigure:
+# TODO better padding between subplots
+# TODO better padding within subplot grid
+class Figure:
     """
-    Construct a figure with single plots and sns.FacetGrid in it.
+    Construct a figure with single plots and
+    `FacetGrid`, `PairGrid`, `JointGrid` in it.
     """
 
     def __init__(
@@ -26,7 +31,7 @@ class FacetFigure:
         edgecolor=None,
         frameon=True,
         clear=False,
-        **kwargs
+        **gridspec_kws
     ):
 
         self._fig = plt.figure(
@@ -40,31 +45,48 @@ class FacetFigure:
 
         self._grid = gridspec.GridSpec(
             nrows, ncols,
-            figure=self._fig, **kwargs
+            figure=self._fig, **gridspec_kws
         )
 
-        self._reserved_keys = {}
+        self._reserved = np.zeros((nrows, ncols)).astype(bool)
+
+        self._keys = []
+        self._handlers = []
 
     def __getitem__(self, key):
-        subplot_spec = self._grid[key]
 
-        if isinstance(key, slice):
-            key = key.__reduce__()
-        elif isinstance(key, tuple):
-            _key = []
-            for ikey in key:
-                if isinstance(ikey, slice):
-                    ikey = ikey.__reduce__()
-
-                _key.append(ikey)
-            key = tuple(_key)
-
-        if key in self._reserved_keys:
-            return self._reserved_keys[key]
-
-        subplot_spec_handler = _SubplotSpecHandler(self._fig, subplot_spec)
-        self._reserved_keys[key] = subplot_spec_handler
+        if key in self._keys:
+            index = self._keys.index(key)
+            return self._handlers[index]
+        if np.any(self._reserved[key]):
+            raise KeyError("Indices in key '{}' already in use.".format(key))
+        # create instance of subplot_spec_handler
+        subplot_spec_handler = _SubplotSpecHandler(self._fig, self._grid[key])
+        # append subplot_spec_handler and reserve key
+        self._handlers.append(subplot_spec_handler)
+        self._keys.append(key)
+        self._reserved[key] = True
+        # return
         return subplot_spec_handler
+
+    @property
+    def axes(self):
+        """all matplotlib.pyplot.Axis objects in a flattened array
+        """
+
+        return np.concatenate([
+            handler.axes
+            for handler in self._handlers
+        ])
+
+    def add_panel_letters(self, lower=False, **kwargs):
+        """
+        Add panel letters to each axis
+        """
+
+        for idx, ax in enumerate(self.axes):
+            letter = get_letter(idx, lower)
+            panel_letter(ax, letter, **kwargs)
 
 
 class _SubplotSpecHandler:
@@ -76,6 +98,14 @@ class _SubplotSpecHandler:
 
         self._reserved = False
         self._g = None
+        self._axes = None
+        self._subplot_grid = None
+
+    @property
+    def axes(self):
+        """matplotlib.pyplot.Axis objects in a flattened array
+        """
+        return np.array([]) if self._axes is None else self._axes
 
     def __getattr__(self, name):
         if hasattr(self._g, name):
@@ -97,7 +127,7 @@ class _SubplotSpecHandler:
                 'grid or plot for selected figure subplot already created.'
             )
 
-        g = sns.FacetGrid(
+        g = FacetGrid(
             *args,
             fig=self._fig,
             subplot_spec=self._subplot_spec,
@@ -106,6 +136,8 @@ class _SubplotSpecHandler:
 
         self._reserved = True
         self._g = g
+        self._subplot_grid = g._gridspec
+        self._axes = g.axes.flatten()
 
         return g
 
@@ -121,7 +153,7 @@ class _SubplotSpecHandler:
                 'grid or plot for selected figure subplot already created.'
             )
 
-        g = sns.PairGrid(
+        g = PairGrid(
             *args,
             fig=self._fig,
             subplot_spec=self._subplot_spec,
@@ -130,6 +162,8 @@ class _SubplotSpecHandler:
 
         self._reserved = True
         self._g = g
+        self._subplot_grid = g._gridspec
+        self._axes = g.axes.flatten()
 
         return g
 
@@ -145,7 +179,7 @@ class _SubplotSpecHandler:
                 'grid or plot for selected figure subplot already created.'
             )
 
-        g = sns.JointGrid(
+        g = JointGrid(
             *args,
             fig=self._fig,
             subplot_spec=self._subplot_spec,
@@ -154,10 +188,12 @@ class _SubplotSpecHandler:
 
         self._reserved = True
         self._g = g
+        self._subplot_grid = g._gridspec
+        self._axes = np.array([self.ax_joint, self.ax_marg_x, self.ax_marg_y])
 
         return g
 
-    def add_subplot(self, **subplot_kws):
+    def add_subplot(self, despine=True, **subplot_kws):
         """
         Returns
         -------
@@ -176,8 +212,13 @@ class _SubplotSpecHandler:
         ax = plt.Subplot(self._fig, g[0, 0], **subplot_kws)
         self._fig.add_subplot(ax)
 
+        if despine:
+            utils.despine(ax=ax)
+
         self._reserved = True
         self._g = ax
+        self._subplot_grid = g
+        self._axes = np.array([ax])
 
         return ax
 
@@ -186,6 +227,7 @@ class _SubplotSpecHandler:
         sharex=False, sharey=False, squeeze=True,
         wspace=None, hspace=None,
         height_ratios=None, width_ratios=None,
+        despine=True,
         **subplot_kws
     ):
         """
@@ -238,10 +280,29 @@ class _SubplotSpecHandler:
 
                 self._fig.add_subplot(axes[irow, icol])
 
+        # Now we turn off labels on the inner axes
+        if sharex and not sharex == 'row':
+            for ax in axes[:-1, :].flat:
+                for label in ax.get_xticklabels():
+                    label.set_visible(False)
+                ax.xaxis.offsetText.set_visible(False)
+
+        if sharey and not sharey == 'col':
+            for ax in axes[:, 1:].flat:
+                for label in ax.get_yticklabels():
+                    label.set_visible(False)
+                ax.yaxis.offsetText.set_visible(False)
+
         if squeeze:
             axes = np.squeeze(axes)
 
+        if despine:
+            for ax in axes.flat:
+                utils.despine(ax=ax)
+
         self._reserved = True
         self._g = axes
+        self._subplot_grid = g
+        self._axes = axes.flatten()
 
         return axes

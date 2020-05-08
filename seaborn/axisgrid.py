@@ -13,6 +13,7 @@ import matplotlib.gridspec as gridspec
 from . import utils
 from .palettes import color_palette, blend_palette
 from .distributions import distplot, kdeplot,  _freedman_diaconis_bins
+from .prettify import scalebar, _infer_sizes, _infer_units
 
 
 __all__ = ["FacetGrid", "PairGrid", "JointGrid", "pairplot", "jointplot"]
@@ -23,6 +24,34 @@ class Grid(object):
     _margin_titles = False
     _legend_out = True
     _subplot_spec = None
+    _gridspec = None
+
+    def use_scalebar(self, **kwargs):
+        """format axes as scalebars"""
+        # set default of infer_sizes to True
+        # infer xsize and ysize from ticks
+        xsize = kwargs.pop('xsize', None)
+        ysize = kwargs.pop('ysize', None)
+        infer_sizes = kwargs.pop('infer_sizes', True)
+        digits = kwargs.pop('digits', 2)
+        xunits = kwargs.pop('xunits', '')
+        yunits = kwargs.pop('yunits', '')
+        # init sizes
+        xsizes = []
+        ysizes = []
+        # get axis-specific params
+        for ax in self.axes.flat:
+            _xsize, _ysize = _infer_sizes(
+                ax, infer_sizes, xsize, ysize, digits)
+            xsizes.append(_xsize)
+            ysizes.append(_ysize)
+
+        for ax, xsize, ysize in zip(self.axes.flat, xsizes, ysizes):
+            scalebar(
+                ax, xsize=xsize, ysize=ysize,
+                xunits=xunits, yunits=yunits,
+                **kwargs)
+        return self
 
     def set(self, **kwargs):
         """Set attributes on each subplot Axes."""
@@ -321,6 +350,7 @@ class FacetGrid(Grid):
                 subplot_spec=subplot_spec,
                 **gridspec_kws
             )
+            self._gridspec = g
 
             axes = np.empty((nrow, ncol), object)
 
@@ -446,16 +476,17 @@ class FacetGrid(Grid):
         if subplot_spec is None:
             fig.tight_layout()
         if despine:
-            self.despine()
+            for ax in self.axes.flat:
+                utils.despine(ax=ax)
 
         # Now we turn off labels on the inner axes
-        if sharex:
+        if sharex and not sharex == 'row':
             for ax in self._not_bottom_axes:
                 for label in ax.get_xticklabels():
                     label.set_visible(False)
                 ax.xaxis.offsetText.set_visible(False)
 
-        if sharey:
+        if sharey and not sharey == 'col':
             for ax in self._not_left_axes:
                 for label in ax.get_yticklabels():
                     label.set_visible(False)
@@ -955,7 +986,7 @@ class FacetGrid(Grid):
         if self._subplot_spec is None:
             utils.despine(self.fig, **kwargs)
         else:
-            for ax in self.axes.ravel():
+            for ax in self.axes.flat:
                 utils.despine(ax=ax, **kwargs)
         return self
 
@@ -1399,6 +1430,7 @@ class PairGrid(Grid):
                 subplot_spec=subplot_spec,
                 **gridspec_kws
             )
+            self._gridspec = g
 
             axes = np.empty((len(y_vars), len(x_vars)), object)
 
@@ -1421,11 +1453,11 @@ class PairGrid(Grid):
                     fig.add_subplot(axes[irow, icol])
 
             # Now we turn off labels on the inner axes
-            for ax in axes[:-1, :].ravel():
+            for ax in axes[:-1, :].flat:
                 for label in ax.get_xticklabels():
                     label.set_visible(False)
                 ax.xaxis.offsetText.set_visible(False)
-            for ax in axes[:, 1:].ravel():
+            for ax in axes[:, 1:].flat:
                 for label in ax.get_yticklabels():
                     label.set_visible(False)
                 ax.yaxis.offsetText.set_visible(False)
@@ -1480,7 +1512,8 @@ class PairGrid(Grid):
         # Make the plot look nice
         if despine:
             self._despine = True
-            utils.despine(fig=fig)
+            for ax in self.axes.flat:
+                utils.despine(ax=ax)
         if subplot_spec is None:
             fig.tight_layout(pad=layout_pad)
 
@@ -1839,6 +1872,7 @@ class JointGrid(object):
                 subplot_spec=subplot_spec,
                 **gridspec_kws
             )
+            self._gridspec = gs
 
             ax_joint = plt.Subplot(f, gs[1:, :-1], **subplot_kws)
             ax_marg_x = plt.Subplot(f, gs[0, :-1], sharex=ax_joint,
