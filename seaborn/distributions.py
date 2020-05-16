@@ -16,6 +16,7 @@ except ImportError:
 
 from .utils import iqr, _kde_support, remove_na
 from .palettes import color_palette, light_palette, dark_palette, blend_palette
+from ._decorators import _deprecate_positional_args
 
 
 __all__ = ["distplot", "kdeplot", "rugplot"]
@@ -35,10 +36,14 @@ def _freedman_diaconis_bins(a):
         return int(np.ceil((a.max() - a.min()) / h))
 
 
-def distplot(a, bins=None, hist=True, kde=True, rug=False, fit=None,
-             hist_kws=None, kde_kws=None, rug_kws=None, fit_kws=None,
-             color=None, vertical=False, norm_hist=False, axlabel=None,
-             label=None, ax=None):
+@_deprecate_positional_args
+def distplot(
+    x=None, *,
+    bins=None, hist=True, kde=True, rug=False, fit=None,
+    hist_kws=None, kde_kws=None, rug_kws=None, fit_kws=None,
+    color=None, vertical=False, norm_hist=False, axlabel=None,
+    label=None, ax=None, a=None,
+):
     """Flexibly plot a univariate distribution of observations.
 
     This function combines the matplotlib ``hist`` function (with automatic
@@ -49,7 +54,7 @@ def distplot(a, bins=None, hist=True, kde=True, rug=False, fit=None,
     Parameters
     ----------
 
-    a : Series, 1d-array, or list.
+    x : Series, 1d-array, or list.
         Observed data. If this is a Series object with a ``name`` attribute,
         the name will be used to label the data axis.
     bins : argument for matplotlib hist(), or None, optional
@@ -163,6 +168,14 @@ def distplot(a, bins=None, hist=True, kde=True, rug=False, fit=None,
         ...                             "alpha": 1, "color": "g"})
 
     """
+    # Handle deprecation of ``a```
+    if a is not None:
+        msg = "The `a` parameter is now called `x`. Please update your code."
+        warnings.warn(msg)
+    else:
+        a = x  # TODO refactor
+
+    # Default to drawing on the currently-active axes
     if ax is None:
         ax = plt.gca()
 
@@ -333,7 +346,7 @@ def _univariate_kdeplot(data, shade, vertical, kernel, bw, gridsize, cut,
         alpha=kwargs.get("alpha", 0.25),
         clip_on=kwargs.get("clip_on", True),
         zorder=kwargs.get("zorder", 1),
-        )
+    )
     if shade:
         if vertical:
             ax.fill_betweenx(y, 0, x, **shade_kws)
@@ -357,6 +370,9 @@ def _univariate_kdeplot(data, shade, vertical, kernel, bw, gridsize, cut,
 def _statsmodels_univariate_kde(data, kernel, bw, gridsize, cut, clip,
                                 cumulative=False):
     """Compute a univariate kernel density estimate using statsmodels."""
+    # statsmodels 0.8 fails on int type data
+    data = data.astype(np.float64)
+
     fft = kernel == "gau"
     kde = smnp.KDEUnivariate(data)
 
@@ -458,6 +474,10 @@ def _bivariate_kdeplot(x, y, filled, fill_lowest,
 
 def _statsmodels_bivariate_kde(x, y, bw, gridsize, cut, clip):
     """Compute a bivariate kde using statsmodels."""
+    # statsmodels 0.8 fails on int type data
+    x = x.astype(np.float64)
+    y = y.astype(np.float64)
+
     if isinstance(bw, str):
         bw_func = getattr(smnp.bandwidths, "bw_" + bw)
         x_bw = bw_func(x)
@@ -501,17 +521,23 @@ def _scipy_bivariate_kde(x, y, bw, gridsize, cut, clip):
     return xx, yy, z
 
 
-def kdeplot(data, data2=None, shade=False, vertical=False, kernel="gau",
-            bw="scott", gridsize=100, cut=3, clip=None, legend=True,
-            cumulative=False, shade_lowest=True, cbar=False, cbar_ax=None,
-            cbar_kws=None, ax=None, **kwargs):
+@_deprecate_positional_args
+def kdeplot(
+    x=None, y=None, *,
+    shade=False, vertical=False, kernel="gau",
+    bw="scott", gridsize=100, cut=3, clip=None, legend=True,
+    cumulative=False, shade_lowest=True, cbar=False, cbar_ax=None,
+    cbar_kws=None, ax=None,
+    data=None, data2=None,  # TODO move data once * is enforced
+    **kwargs,
+):
     """Fit and plot a univariate or bivariate kernel density estimate.
 
     Parameters
     ----------
-    data : 1d array-like
+    x : 1d array-like
         Input data.
-    data2: 1d array-like, optional
+    y: 1d array-like, optional
         Second input data. If present, a bivariate KDE will be estimated.
     shade : bool, optional
         If True, shade in the area under the KDE curve (or draw with filled
@@ -652,64 +678,62 @@ def kdeplot(data, data2=None, shade=False, vertical=False, kernel="gau",
         ...                  cmap="Blues", shade=True, shade_lowest=False)
 
     """
-    if ax is None:
-        ax = plt.gca()
-
-    if isinstance(data, list):
-        data = np.asarray(data)
-
-    if len(data) == 0:
-        return ax
-
-    data = data.astype(np.float64)
-    if data2 is not None:
-        if isinstance(data2, list):
-            data2 = np.asarray(data2)
-        data2 = data2.astype(np.float64)
-
-    warn = False
-    bivariate = False
-    if isinstance(data, np.ndarray) and np.ndim(data) > 1:
-        warn = True
-        bivariate = True
-        x, y = data.T
-    elif isinstance(data, pd.DataFrame) and np.ndim(data) > 1:
-        warn = True
-        bivariate = True
-        x = data.iloc[:, 0].values
-        y = data.iloc[:, 1].values
-    elif data2 is not None:
-        bivariate = True
+    # Handle deprecation of `data` as name for x variable
+    # TODO this can be removed once refactored to do centralized preprocessing
+    # of input variables, because a vector input to `data` will be treated like
+    # an input to `x`. Warning is probably not necessary.
+    x_passed_as_data = (
+        x is None
+        and data is not None
+        and np.ndim(data) == 1
+    )
+    if x_passed_as_data:
         x = data
+
+    # Handle deprecation of `data2` as name for y variable
+    if data2 is not None:
+        msg = "The `data2` param is now named `y`; please update your code."
+        warnings.warn(msg)
         y = data2
 
-    if warn:
-        warn_msg = ("Passing a 2D dataset for a bivariate plot is deprecated "
-                    "in favor of kdeplot(x, y), and it will cause an error in "
-                    "future versions. Please update your code.")
-        warnings.warn(warn_msg, UserWarning)
+    # TODO replace this preprocessing with central refactoring
+    if isinstance(x, list):
+        x = np.asarray(x)
+    if isinstance(y, list):
+        y = np.asarray(y)
 
+    bivariate = x is not None and y is not None
     if bivariate and cumulative:
         raise TypeError("Cumulative distribution plots are not"
                         "supported for bivariate distributions.")
+
+    if ax is None:
+        ax = plt.gca()
+
     if bivariate:
         ax = _bivariate_kdeplot(x, y, shade, shade_lowest,
                                 kernel, bw, gridsize, cut, clip, legend,
                                 cbar, cbar_ax, cbar_kws, ax, **kwargs)
     else:
-        ax = _univariate_kdeplot(data, shade, vertical, kernel, bw,
+        ax = _univariate_kdeplot(x, shade, vertical, kernel, bw,
                                  gridsize, cut, clip, legend, ax,
                                  cumulative=cumulative, **kwargs)
 
     return ax
 
 
-def rugplot(a, height=.05, axis="x", ax=None, **kwargs):
+@_deprecate_positional_args
+def rugplot(
+    x=None, *,
+    height=.05, axis="x", ax=None,
+    a=None,
+    **kwargs
+):
     """Plot datapoints in an array as sticks on an axis.
 
     Parameters
     ----------
-    a : vector
+    x : vector
         1D array of observations.
     height : scalar, optional
         Height of ticks as proportion of the axis.
@@ -726,6 +750,14 @@ def rugplot(a, height=.05, axis="x", ax=None, **kwargs):
         The Axes object with the plot on it.
 
     """
+    # Handle deprecation of ``a```
+    if a is not None:
+        msg = "The `a` parameter is now called `x`. Please update your code."
+        warnings.warn(msg)
+    else:
+        a = x  # TODO refactor
+
+    # Default to drawing on the currently active axes
     if ax is None:
         ax = plt.gca()
     a = np.asarray(a)

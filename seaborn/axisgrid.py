@@ -12,7 +12,8 @@ import matplotlib.gridspec as gridspec
 
 from . import utils
 from .palettes import color_palette, blend_palette
-from .distributions import distplot, kdeplot,  _freedman_diaconis_bins
+from .distributions import distplot, kdeplot, _freedman_diaconis_bins
+from ._decorators import _deprecate_positional_args
 from .prettify import scalebar, _infer_sizes, _infer_units
 
 
@@ -53,6 +54,10 @@ class Grid(object):
                 **kwargs)
         return self
 
+    def __init__(self):
+
+        self._tight_layout_rect = [0, 0, 1, 1]
+
     def set(self, **kwargs):
         """Set attributes on each subplot Axes."""
         for ax in self.axes.flat:
@@ -64,6 +69,13 @@ class Grid(object):
         kwargs = kwargs.copy()
         kwargs.setdefault("bbox_inches", "tight")
         self.fig.savefig(*args, **kwargs)
+
+    def tight_layout(self, *args, **kwargs):
+        """Call fig.tight_layout within rect that exclude the legend."""
+        kwargs = kwargs.copy()
+        kwargs.setdefault("rect", self._tight_layout_rect)
+        if self._subplot_spec is None:
+            self.fig.tight_layout(*args, **kwargs)
 
     def add_legend(self, legend_data=None, title=None, label_order=None,
                    **kwargs):
@@ -155,6 +167,7 @@ class Grid(object):
 
             # Place the subplot axes to give space for the legend
             self.fig.subplots_adjust(right=right)
+            self._tight_layout_rect[2] = right
 
         else:
             # Draw a legend in the first axis
@@ -254,21 +267,27 @@ _facet_docs = dict(
         the last column. This option is experimental and may not work in all
         cases.\
     """),
-    )
+)
 
 
 class FacetGrid(Grid):
     """Multi-plot grid for plotting conditional relationships."""
-    def __init__(self, data, row=None, col=None, hue=None, col_wrap=None,
-                 sharex=True, sharey=True, height=3, aspect=1, palette=None,
-                 row_order=None, col_order=None, hue_order=None, hue_kws=None,
-                 dropna=True, legend_out=True, despine=True,
-                 margin_titles=False, xlim=None, ylim=None, subplot_kws=None,
-                 gridspec_kws=None, size=None,
-                 or_rowcol=False, fig=None, subplot_spec=None):
+    @_deprecate_positional_args
+    def __init__(
+        self, data, *,
+        row=None, col=None, hue=None, col_wrap=None,
+        sharex=True, sharey=True, height=3, aspect=1, palette=None,
+        row_order=None, col_order=None, hue_order=None, hue_kws=None,
+        dropna=True, legend_out=True, despine=True,
+        margin_titles=False, xlim=None, ylim=None, subplot_kws=None,
+        gridspec_kws=None, size=None,
+        or_rowcol=False, fig=None, subplot_spec=None
+    ):
 
         assert not (subplot_spec is not None and fig is None), \
             'provide figure if providing subplot_spec'
+
+        super(FacetGrid, self).__init__()
 
         # Handle deprecations
         if size is not None:
@@ -473,8 +492,7 @@ class FacetGrid(Grid):
         self._subplot_spec = subplot_spec
 
         # Make the axes look good
-        if subplot_spec is None:
-            fig.tight_layout()
+        self.tight_layout()
         if despine:
             for ax in self.axes.flat:
                 utils.despine(ax=ax)
@@ -965,8 +983,7 @@ class FacetGrid(Grid):
         """Finalize the annotations and layout."""
         self.set_axis_labels(*axlabels)
         self.set_titles()
-        if self._subplot_spec is None:
-            self.fig.tight_layout()
+        self.tight_layout()
 
     def facet_axis(self, row_i, col_j):
         """Make the axis identified by these indices active and return it."""
@@ -1047,7 +1064,7 @@ class FacetGrid(Grid):
                 ax.set_yticklabels(labels, **kwargs)
         return self
 
-    def set_titles(self, template=None, row_template=None,  col_template=None,
+    def set_titles(self, template=None, row_template=None, col_template=None,
                    **kwargs):
         """Draw titles either above each facet or on the grid margins.
 
@@ -1150,9 +1167,11 @@ class FacetGrid(Grid):
             axes = []
             n_empty = self._nrow * self._ncol - self._n_facets
             for i, ax in enumerate(self.axes):
-                append = (i % self._ncol and
-                          i < (self._ncol * (self._nrow - 1)) and
-                          i < (self._ncol * (self._nrow - 1) - n_empty))
+                append = (
+                    i % self._ncol
+                    and i < (self._ncol * (self._nrow - 1))
+                    and i < (self._ncol * (self._nrow - 1) - n_empty)
+                )
                 if append:
                     axes.append(ax)
             return np.array(axes, object).flat
@@ -1190,8 +1209,10 @@ class FacetGrid(Grid):
             axes = []
             n_empty = self._nrow * self._ncol - self._n_facets
             for i, ax in enumerate(self.axes):
-                append = (i >= (self._ncol * (self._nrow - 1)) or
-                          i >= (self._ncol * (self._nrow - 1) - n_empty))
+                append = (
+                    i >= (self._ncol * (self._nrow - 1))
+                    or i >= (self._ncol * (self._nrow - 1) - n_empty)
+                )
                 if append:
                     axes.append(ax)
             return np.array(axes, object).flat
@@ -1205,8 +1226,10 @@ class FacetGrid(Grid):
             axes = []
             n_empty = self._nrow * self._ncol - self._n_facets
             for i, ax in enumerate(self.axes):
-                append = (i < (self._ncol * (self._nrow - 1)) and
-                          i < (self._ncol * (self._nrow - 1) - n_empty))
+                append = (
+                    i < (self._ncol * (self._nrow - 1))
+                    and i < (self._ncol * (self._nrow - 1) - n_empty)
+                )
                 if append:
                     axes.append(ax)
             return np.array(axes, object).flat
@@ -1230,13 +1253,16 @@ class PairGrid(Grid):
     See the :ref:`tutorial <grid_tutorial>` for more information.
 
     """
-
-    def __init__(self, data, hue=None, hue_order=None, palette=None,
-                 hue_kws=None, vars=None, x_vars=None, y_vars=None,
-                 corner=False, diag_sharey=True, height=2.5, aspect=1,
-                 layout_pad=0, despine=True, dropna=True, size=None,
-                 subplot_kws=None, gridspec_kws=None,
-                 fig=None, subplot_spec=None):
+    @_deprecate_positional_args
+    def __init__(
+        self, data, *,
+        hue=None, hue_order=None, palette=None,
+        hue_kws=None, vars=None, x_vars=None, y_vars=None,
+        corner=False, diag_sharey=True, height=2.5, aspect=1,
+        layout_pad=0, despine=True, dropna=True, size=None,
+        subplot_kws=None, gridspec_kws=None,
+        fig=None, subplot_spec=None
+    ):
         """Initialize the plot figure and PairGrid object.
 
         Parameters
@@ -1377,6 +1403,7 @@ class PairGrid(Grid):
 
         """
 
+        super(PairGrid, self).__init__()
         assert not (subplot_spec is not None and fig is None), \
             'provide figure if providing subplot_spec'
 
@@ -1514,8 +1541,8 @@ class PairGrid(Grid):
             self._despine = True
             for ax in self.axes.flat:
                 utils.despine(ax=ax)
-        if subplot_spec is None:
-            fig.tight_layout(pad=layout_pad)
+
+        self.tight_layout(pad=layout_pad)
 
     def map(self, func, **kwargs):
         """Plot with the same function in every subplot.
@@ -1732,10 +1759,15 @@ class PairGrid(Grid):
 class JointGrid(object):
     """Grid for drawing a bivariate plot with marginal univariate plots."""
 
-    def __init__(self, x, y, data=None, height=6, ratio=5, space=.2,
-                 dropna=True, xlim=None, ylim=None, size=None,
-                 subplot_kws=None, gridspec_kws=None,
-                 fig=None, subplot_spec=None):
+    @_deprecate_positional_args
+    def __init__(
+        self, x, y, *,
+        data=None,
+        height=6, ratio=5, space=.2,
+        dropna=True, xlim=None, ylim=None, size=None,
+        subplot_kws=None, gridspec_kws=None,
+        fig=None, subplot_spec=None
+    ):
         """Set up the grid of subplots.
 
         Parameters
@@ -2114,11 +2146,15 @@ class JointGrid(object):
         self.fig.savefig(*args, **kwargs)
 
 
-def pairplot(data, hue=None, hue_order=None, palette=None,
-             vars=None, x_vars=None, y_vars=None,
-             kind="scatter", diag_kind="auto", markers=None,
-             height=2.5, aspect=1, corner=False, dropna=True,
-             plot_kws=None, diag_kws=None, grid_kws=None, size=None):
+@_deprecate_positional_args
+def pairplot(
+    data, *,
+    hue=None, hue_order=None, palette=None,
+    vars=None, x_vars=None, y_vars=None,
+    kind="scatter", diag_kind="auto", markers=None,
+    height=2.5, aspect=1, corner=False, dropna=True,
+    plot_kws=None, diag_kws=None, grid_kws=None, size=None,
+):
     """Plot pairwise relationships in a dataset.
 
     By default, this function will create a grid of Axes such that each numeric
@@ -2347,10 +2383,16 @@ def pairplot(data, hue=None, hue_order=None, palette=None,
     return grid
 
 
-def jointplot(x, y, data=None, kind="scatter", stat_func=None,
-              color=None, height=6, ratio=5, space=.2,
-              dropna=True, xlim=None, ylim=None,
-              joint_kws=None, marginal_kws=None, annot_kws=None, **kwargs):
+@_deprecate_positional_args
+def jointplot(
+    x=None, y=None, *,
+    data=None,
+    kind="scatter", stat_func=None,
+    color=None, height=6, ratio=5, space=.2,
+    dropna=True, xlim=None, ylim=None,
+    joint_kws=None, marginal_kws=None, annot_kws=None,
+    **kwargs
+):
     """Draw a plot of two variables with bivariate and univariate graphs.
 
     This function provides a convenient interface to the :class:`JointGrid`
@@ -2493,9 +2535,11 @@ def jointplot(x, y, data=None, kind="scatter", stat_func=None,
     cmap = blend_palette(colors, as_cmap=True)
 
     # Initialize the JointGrid object
-    grid = JointGrid(x, y, data, dropna=dropna,
-                     height=height, ratio=ratio, space=space,
-                     xlim=xlim, ylim=ylim)
+    grid = JointGrid(
+        x, y, data=data,
+        dropna=dropna, height=height, ratio=ratio, space=space,
+        xlim=xlim, ylim=ylim
+    )
 
     # Plot the data using the grid
     if kind == "scatter":
