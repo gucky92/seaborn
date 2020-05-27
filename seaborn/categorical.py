@@ -10,8 +10,9 @@ import matplotlib.pyplot as plt
 import warnings
 from distutils.version import LooseVersion
 
+from ._core import variable_type, infer_orient, categorical_order
 from . import utils
-from .utils import iqr, categorical_order, remove_na
+from .utils import remove_na
 from .algorithms import bootstrap
 from .palettes import color_palette, husl_palette, light_palette, dark_palette
 from .axisgrid import FacetGrid, _facet_docs
@@ -30,6 +31,7 @@ class _CategoricalPlotter(object):
 
     width = .8
     default_palette = "light"
+    require_numeric = True
 
     def establish_variables(self, x=None, y=None, hue=None, data=None,
                             orient=None, order=None, hue_order=None,
@@ -68,11 +70,8 @@ class _CategoricalPlotter(object):
                     order = []
                     # Reduce to just numeric columns
                     for col in data:
-                        try:
-                            data[col].astype(np.float)
+                        if variable_type(data[col]) == "numeric":
                             order.append(col)
-                        except ValueError:
-                            pass
                 plot_data = data[order]
                 group_names = order
                 group_label = data.columns.name
@@ -153,7 +152,9 @@ class _CategoricalPlotter(object):
                     raise ValueError(err)
 
             # Figure out the plotting orientation
-            orient = self.infer_orient(x, y, orient)
+            orient = infer_orient(
+                x, y, orient, require_numeric=self.require_numeric
+            )
 
             # Option 2a:
             # We are plotting a single set of data
@@ -320,43 +321,6 @@ class _CategoricalPlotter(object):
         # Assign object attributes
         self.colors = rgb_colors
         self.gray = gray
-
-    def infer_orient(self, x, y, orient=None):
-        """Determine how the plot should be oriented based on the data."""
-        orient = str(orient)
-
-        def is_categorical(s):
-            return pd.api.types.is_categorical_dtype(s)
-
-        def is_not_numeric(s):
-            try:
-                np.asarray(s, dtype=np.float)
-            except ValueError:
-                return True
-            return False
-
-        no_numeric = "Neither the `x` nor `y` variable appears to be numeric."
-
-        if orient.startswith("v"):
-            return "v"
-        elif orient.startswith("h"):
-            return "h"
-        elif x is None:
-            return "v"
-        elif y is None:
-            return "h"
-        elif is_categorical(y):
-            if is_categorical(x):
-                raise ValueError(no_numeric)
-            else:
-                return "h"
-        elif is_not_numeric(y):
-            if is_not_numeric(x):
-                raise ValueError(no_numeric)
-            else:
-                return "h"
-        else:
-            return "v"
 
     @property
     def hue_offsets(self):
@@ -983,7 +947,7 @@ class _ViolinPlotter(_CategoricalPlotter):
         """Draw boxplot information at center of the density."""
         # Compute the boxplot statistics
         q25, q50, q75 = np.percentile(data, [25, 50, 75])
-        whisker_lim = 1.5 * iqr(data)
+        whisker_lim = 1.5 * stats.iqr(data)
         h1 = np.min(data[data >= (q25 - whisker_lim)])
         h2 = np.max(data[data <= (q75 + whisker_lim)])
 
@@ -1080,6 +1044,7 @@ class _ViolinPlotter(_CategoricalPlotter):
 class _CategoricalScatterPlotter(_CategoricalPlotter):
 
     default_palette = "dark"
+    require_numeric = False
 
     @property
     def point_colors(self):
@@ -1456,6 +1421,8 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
 
 class _CategoricalStatPlotter(_CategoricalPlotter):
 
+    require_numeric = True
+
     @property
     def nested_width(self):
         """A float with the width of plot elements when hue nesting is used."""
@@ -1819,6 +1786,10 @@ class _PointPlotter(_CategoricalStatPlotter):
             ax.invert_yaxis()
 
 
+class _CountPlotter(_BarPlotter):
+    require_numeric = False
+
+
 class _LVPlotter(_CategoricalPlotter):
 
     def __init__(self, x, y, hue, data, order, hue_order,
@@ -2148,9 +2119,9 @@ _categorical_docs = dict(
     orient=dedent("""\
     orient : "v" | "h", optional
         Orientation of the plot (vertical or horizontal). This is usually
-        inferred from the dtype of the input variables, but can be used to
-        specify when the "categorical" variable is a numeric or when plotting
-        wide-form data.\
+        inferred based on the type of the input variables, but it can be used
+        to resolve ambiguitiy when both `x` and `y` are numeric or when
+        plotting wide-form data.\
     """),
     color=dedent("""\
     color : matplotlib color, optional
@@ -2239,7 +2210,8 @@ _categorical_docs.update(_facet_docs)
 
 @_deprecate_positional_args
 def boxplot(
-    x=None, y=None, *,
+    *,
+    x=None, y=None,
     hue=None, data=None,
     order=None, hue_order=None,
     orient=None, color=None, palette=None, saturation=.75,
@@ -2395,7 +2367,8 @@ boxplot.__doc__ = dedent("""\
 
 @_deprecate_positional_args
 def violinplot(
-    x=None, y=None, *,
+    *,
+    x=None, y=None,
     hue=None, data=None,
     order=None, hue_order=None,
     bw="scott", cut=2, scale="area", scale_hue=True, gridsize=100,
@@ -2640,7 +2613,8 @@ def lvplot(*args, **kwargs):
 
 @_deprecate_positional_args
 def boxenplot(
-    x=None, y=None, *,
+    *,
+    x=None, y=None,
     hue=None, data=None,
     order=None, hue_order=None,
     orient=None, color=None, palette=None, saturation=.75,
@@ -2801,7 +2775,8 @@ boxenplot.__doc__ = dedent("""\
 
 @_deprecate_positional_args
 def stripplot(
-    x=None, y=None, *,
+    *,
+    x=None, y=None,
     hue=None, data=None,
     order=None, hue_order=None,
     jitter=True, dodge=False, orient=None, color=None, palette=None,
@@ -2997,7 +2972,8 @@ stripplot.__doc__ = dedent("""\
 
 @_deprecate_positional_args
 def swarmplot(
-    x=None, y=None, *,
+    *,
+    x=None, y=None,
     hue=None, data=None,
     order=None, hue_order=None,
     dodge=False, orient=None, color=None, palette=None,
@@ -3177,7 +3153,8 @@ swarmplot.__doc__ = dedent("""\
 
 @_deprecate_positional_args
 def barplot(
-    x=None, y=None, *,
+    *,
+    x=None, y=None,
     hue=None, data=None,
     order=None, hue_order=None,
     estimator=np.mean, ci=95, n_boot=1000, units=None, seed=None,
@@ -3322,7 +3299,7 @@ barplot.__doc__ = dedent("""\
     .. plot::
         :context: close-figs
 
-        >>> ax = sns.barplot("size", y="total_bill", data=tips,
+        >>> ax = sns.barplot(x="size", y="total_bill", data=tips,
         ...                  palette="Blues_d")
 
     Use ``hue`` without changing bar position or width:
@@ -3339,7 +3316,7 @@ barplot.__doc__ = dedent("""\
     .. plot::
         :context: close-figs
 
-        >>> ax = sns.barplot("size", y="total_bill", data=tips,
+        >>> ax = sns.barplot(x="size", y="total_bill", data=tips,
         ...                  color="salmon", saturation=.5)
 
     Use :meth:`matplotlib.axes.Axes.bar` parameters to control the style.
@@ -3347,7 +3324,7 @@ barplot.__doc__ = dedent("""\
     .. plot::
         :context: close-figs
 
-        >>> ax = sns.barplot("day", "total_bill", data=tips,
+        >>> ax = sns.barplot(x="day", y="total_bill", data=tips,
         ...                  linewidth=2.5, facecolor=(1, 1, 1, 0),
         ...                  errcolor=".2", edgecolor=".2")
 
@@ -3369,7 +3346,8 @@ barplot.__doc__ = dedent("""\
 
 @_deprecate_positional_args
 def pointplot(
-    x=None, y=None, *,
+    *,
+    x=None, y=None,
     hue=None, data=None,
     order=None, hue_order=None,
     estimator=np.mean, ci=95, n_boot=1000, units=None, seed=None,
@@ -3509,7 +3487,7 @@ pointplot.__doc__ = dedent("""\
     .. plot::
         :context: close-figs
 
-        >>> ax = sns.pointplot("time", y="total_bill", data=tips,
+        >>> ax = sns.pointplot(x="time", y="total_bill", data=tips,
         ...                    color="#bb3f3f")
 
     Use a different color palette for the points:
@@ -3576,7 +3554,8 @@ pointplot.__doc__ = dedent("""\
 
 @_deprecate_positional_args
 def countplot(
-    x=None, y=None, *,
+    *,
+    x=None, y=None,
     hue=None, data=None,
     order=None, hue_order=None,
     orient=None, color=None, palette=None, saturation=.75,
@@ -3599,14 +3578,14 @@ def countplot(
         orient = "v"
         y = x
     elif x is not None and y is not None:
-        raise TypeError("Cannot pass values for both `x` and `y`")
-    else:
-        raise TypeError("Must pass values for either `x` or `y`")
+        raise ValueError("Cannot pass values for both `x` and `y`")
 
-    plotter = _BarPlotter(x, y, hue, data, order, hue_order,
-                          estimator, ci, n_boot, units, seed,
-                          orient, color, palette, saturation,
-                          errcolor, errwidth, capsize, dodge)
+    plotter = _CountPlotter(
+        x, y, hue, data, order, hue_order,
+        estimator, ci, n_boot, units, seed,
+        orient, color, palette, saturation,
+        errcolor, errwidth, capsize, dodge
+    )
 
     plotter.value_label = "count"
 
@@ -3735,7 +3714,8 @@ def factorplot(*args, **kwargs):
 
 @_deprecate_positional_args
 def catplot(
-    x=None, y=None, *,
+    *,
+    x=None, y=None,
     hue=None, data=None,
     row=None, col=None,  # TODO move in front of data when * is enforced
     col_wrap=None, estimator=np.mean, ci=95, n_boot=1000,
@@ -3769,7 +3749,7 @@ def catplot(
         elif y is None and x is not None:
             x_, y_, orient = x, x, "v"
         else:
-            raise ValueError("Either `x` or `y` must be None for count plots")
+            raise ValueError("Either `x` or `y` must be None for kind='count'")
     else:
         x_, y_ = x, y
 
@@ -3782,7 +3762,19 @@ def catplot(
 
     # Determine the order for the whole dataset, which will be used in all
     # facets to ensure representation of all data in the final plot
+    plotter_class = {
+        "box": _BoxPlotter,
+        "violin": _ViolinPlotter,
+        "boxen": _LVPlotter,
+        "lv": _LVPlotter,
+        "bar": _BarPlotter,
+        "point": _PointPlotter,
+        "strip": _StripPlotter,
+        "swarm": _SwarmPlotter,
+        "count": _CountPlotter,
+    }[kind]
     p = _CategoricalPlotter()
+    p.require_numeric = plotter_class.require_numeric
     p.establish_variables(x_, y_, hue, data, orient, order, hue_order)
     order = p.group_names
     hue_order = p.hue_names
@@ -3822,7 +3814,12 @@ def catplot(
     g = FacetGrid(**facet_kws)
 
     # Draw the plot onto the facets
-    g.map_dataframe(plot_func, x, y, hue=hue, **plot_kws)
+    g.map_dataframe(plot_func, x=x, y=y, hue=hue, **plot_kws)
+
+    if p.orient == "h":
+        g.set_axis_labels(p.value_label, p.group_label)
+    else:
+        g.set_axis_labels(p.group_label, p.value_label)
 
     # Special case axis labels for a count type plot
     if kind == "count":
@@ -3964,7 +3961,7 @@ catplot.__doc__ = dedent("""\
         :context: close-figs
 
         >>> titanic = sns.load_dataset("titanic")
-        >>> g = sns.catplot("alive", col="deck", col_wrap=4,
+        >>> g = sns.catplot(x="alive", col="deck", col_wrap=4,
         ...                 data=titanic[titanic.deck.notnull()],
         ...                 kind="count", height=2.5, aspect=.8)
 

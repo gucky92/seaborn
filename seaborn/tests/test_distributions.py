@@ -9,6 +9,9 @@ import nose.tools as nt
 import numpy.testing as npt
 
 from .. import distributions as dist
+from ..distributions import (
+    rugplot,
+)
 
 _no_statsmodels = not dist._has_statsmodels
 
@@ -29,42 +32,42 @@ class TestDistPlot(object):
             fd_edges = np.histogram_bin_edges(self.x, "fd")
         except AttributeError:
             pytest.skip("Requires numpy >= 1.15")
-        ax = dist.distplot(self.x)
+        ax = dist.distplot(x=self.x)
         for edge, bar in zip(fd_edges, ax.patches):
             assert pytest.approx(edge) == bar.get_x()
 
         plt.close(ax.figure)
         n = 25
         n_edges = np.histogram_bin_edges(self.x, n)
-        ax = dist.distplot(self.x, bins=n)
+        ax = dist.distplot(x=self.x, bins=n)
         for edge, bar in zip(n_edges, ax.patches):
             assert pytest.approx(edge) == bar.get_x()
 
     def test_elements(self):
 
         n = 10
-        ax = dist.distplot(self.x, bins=n,
+        ax = dist.distplot(x=self.x, bins=n,
                            hist=True, kde=False, rug=False, fit=None)
         assert len(ax.patches) == 10
         assert len(ax.lines) == 0
         assert len(ax.collections) == 0
 
         plt.close(ax.figure)
-        ax = dist.distplot(self.x,
+        ax = dist.distplot(x=self.x,
                            hist=False, kde=True, rug=False, fit=None)
         assert len(ax.patches) == 0
         assert len(ax.lines) == 1
         assert len(ax.collections) == 0
 
         plt.close(ax.figure)
-        ax = dist.distplot(self.x,
+        ax = dist.distplot(x=self.x,
                            hist=False, kde=False, rug=True, fit=None)
         assert len(ax.patches) == 0
         assert len(ax.lines) == 0
         assert len(ax.collections) == 1
 
         plt.close(ax.figure)
-        ax = dist.distplot(self.x,
+        ax = dist.distplot(x=self.x,
                            hist=False, kde=False, rug=False, fit=stats.norm)
         assert len(ax.patches) == 0
         assert len(ax.lines) == 1
@@ -75,8 +78,8 @@ class TestDistPlot(object):
         f, (ax1, ax2) = plt.subplots(2)
         x_null = np.append(self.x, [np.nan])
 
-        dist.distplot(self.x, ax=ax1)
-        dist.distplot(x_null, ax=ax2)
+        dist.distplot(x=self.x, ax=ax1)
+        dist.distplot(x=x_null, ax=ax2)
 
         line1 = ax1.lines[0]
         line2 = ax2.lines[0]
@@ -205,7 +208,7 @@ class TestKDE(object):
     def test_kde_cummulative_2d(self):
         """Check error if args indicate bivariate KDE and cumulative."""
         with npt.assert_raises(TypeError):
-            dist.kdeplot(self.x, self.y, cumulative=True)
+            dist.kdeplot(x=self.x, y=self.y, cumulative=True)
 
     def test_kde_singular(self):
         """Check that kdeplot warns and skips on singular inputs."""
@@ -257,8 +260,8 @@ class TestKDE(object):
         x_missing = np.append(self.x, [np.nan, np.nan])
 
         f, ax = plt.subplots()
-        dist.kdeplot(self.x, cumulative=cumulative)
-        dist.kdeplot(x_missing, cumulative=cumulative)
+        dist.kdeplot(x=self.x, cumulative=cumulative)
+        dist.kdeplot(x=x_missing, cumulative=cumulative)
 
         line1, line2 = ax.lines
         assert np.array_equal(line1.get_xydata(), line2.get_xydata())
@@ -266,8 +269,8 @@ class TestKDE(object):
     def test_bivariate_kde_series(self):
         df = pd.DataFrame({'x': self.x, 'y': self.y})
 
-        ax_series = dist.kdeplot(df.x, df.y)
-        ax_values = dist.kdeplot(df.x.values, df.y.values)
+        ax_series = dist.kdeplot(x=df.x, y=df.y)
+        ax_values = dist.kdeplot(x=df.x.values, y=df.y.values)
 
         nt.assert_equal(len(ax_series.collections),
                         len(ax_values.collections))
@@ -277,7 +280,7 @@ class TestKDE(object):
     def test_bivariate_kde_colorbar(self):
 
         f, ax = plt.subplots()
-        dist.kdeplot(self.x, self.y,
+        dist.kdeplot(x=self.x, y=self.y,
                      cbar=True, cbar_kws=dict(label="density"),
                      ax=ax)
         nt.assert_equal(len(f.axes), 2)
@@ -286,12 +289,12 @@ class TestKDE(object):
     def test_legend(self):
 
         f, ax = plt.subplots()
-        dist.kdeplot(self.x, self.y, label="test1")
+        dist.kdeplot(x=self.x, y=self.y, label="test1")
         line = ax.lines[-1]
         assert line.get_label() == "test1"
 
         f, ax = plt.subplots()
-        dist.kdeplot(self.x, self.y, shade=True, label="test2")
+        dist.kdeplot(x=self.x, y=self.y, shade=True, label="test2")
         fill = ax.collections[-1]
         assert fill.get_label() == "test2"
 
@@ -300,7 +303,7 @@ class TestKDE(object):
         rgb = (.1, .5, .7)
         f, ax = plt.subplots()
 
-        dist.kdeplot(self.x, self.y, color=rgb)
+        dist.kdeplot(x=self.x, y=self.y, color=rgb)
         contour = ax.collections[-1]
         assert np.array_equal(contour.get_color()[0, :3], rgb)
         low = ax.collections[0].get_color().mean()
@@ -308,20 +311,20 @@ class TestKDE(object):
         assert low < high
 
         f, ax = plt.subplots()
-        dist.kdeplot(self.x, self.y, shade=True, color=rgb)
+        dist.kdeplot(x=self.x, y=self.y, shade=True, color=rgb)
         contour = ax.collections[-1]
         low = ax.collections[0].get_facecolor().mean()
         high = ax.collections[-1].get_facecolor().mean()
         assert low > high
 
         f, ax = plt.subplots()
-        dist.kdeplot(self.x, self.y, shade=True, colors=[rgb])
+        dist.kdeplot(x=self.x, y=self.y, shade=True, colors=[rgb])
         for level in ax.collections:
             level_rgb = tuple(level.get_facecolor().squeeze()[:3])
             assert level_rgb == rgb
 
 
-class TestRugPlot(object):
+class TestRugPlotter:
 
     @pytest.fixture
     def list_data(self):
@@ -339,45 +342,45 @@ class TestRugPlot(object):
 
         h = .1
 
-        for data in [list_data, array_data, series_data]:
+        for x in [list_data, array_data, series_data]:
 
             f, ax = plt.subplots()
-            dist.rugplot(data, height=h)
+            rugplot(x=x, height=h)
             rug, = ax.collections
             segments = np.array(rug.get_segments())
 
-            assert len(segments) == len(data)
-            assert np.array_equal(segments[:, 0, 0], data)
-            assert np.array_equal(segments[:, 1, 0], data)
-            assert np.array_equal(segments[:, 0, 1], np.zeros_like(data))
-            assert np.array_equal(segments[:, 1, 1], np.ones_like(data) * h)
+            assert len(segments) == len(x)
+            assert np.array_equal(segments[:, 0, 0], x)
+            assert np.array_equal(segments[:, 1, 0], x)
+            assert np.array_equal(segments[:, 0, 1], np.zeros_like(x))
+            assert np.array_equal(segments[:, 1, 1], np.ones_like(x) * h)
 
             plt.close(f)
 
             f, ax = plt.subplots()
-            dist.rugplot(data, height=h, axis="y")
+            rugplot(x=x, height=h, axis="y")
             rug, = ax.collections
             segments = np.array(rug.get_segments())
 
-            assert len(segments) == len(data)
-            assert np.array_equal(segments[:, 0, 1], data)
-            assert np.array_equal(segments[:, 1, 1], data)
-            assert np.array_equal(segments[:, 0, 0], np.zeros_like(data))
-            assert np.array_equal(segments[:, 1, 0], np.ones_like(data) * h)
+            assert len(segments) == len(x)
+            assert np.array_equal(segments[:, 0, 1], x)
+            assert np.array_equal(segments[:, 1, 1], x)
+            assert np.array_equal(segments[:, 0, 0], np.zeros_like(x))
+            assert np.array_equal(segments[:, 1, 0], np.ones_like(x) * h)
 
             plt.close(f)
 
         f, ax = plt.subplots()
-        dist.rugplot(data, axis="y")
-        dist.rugplot(data, vertical=True)
+        rugplot(x=x, axis="y")
+        rugplot(x=x, vertical=True)
         c1, c2 = ax.collections
         assert np.array_equal(c1.get_segments(), c2.get_segments())
         plt.close(f)
 
         f, ax = plt.subplots()
-        dist.rugplot(data)
-        dist.rugplot(data, lw=2)
-        dist.rugplot(data, linewidth=3, alpha=.5)
+        rugplot(x=x)
+        rugplot(x=x, lw=2)
+        rugplot(x=x, linewidth=3, alpha=.5)
         for c, lw in zip(ax.collections, [1, 2, 3]):
             assert np.squeeze(c.get_linewidth()).item() == lw
         assert c.get_alpha() == .5
@@ -385,8 +388,8 @@ class TestRugPlot(object):
 
     def test_a_parameter_deprecation(self, series_data):
 
-        with pytest.warns(UserWarning):
-            ax = dist.rugplot(a=series_data)
+        with pytest.warns(FutureWarning):
+            ax = rugplot(a=series_data)
         rug, = ax.collections
         segments = np.array(rug.get_segments())
         assert len(segments) == len(series_data)

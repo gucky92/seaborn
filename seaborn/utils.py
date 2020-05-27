@@ -17,23 +17,6 @@ __all__ = ["desaturate", "saturate", "set_hls_values",
            "despine", "get_dataset_names", "get_data_home", "load_dataset"]
 
 
-def remove_na(arr):
-    """Helper method for removing NA values from array-like.
-
-    Parameters
-    ----------
-    arr : array-like
-        The array-like from which to remove NA values.
-
-    Returns
-    -------
-    clean_arr : array-like
-        The original array with NA values removed.
-
-    """
-    return arr[pd.notnull(arr)]
-
-
 def sort_df(df, *args, **kwargs):
     """Wrapper to handle different pandas sorting API pre/post 0.17."""
     msg = "This function is deprecated and will be removed in a future version"
@@ -97,7 +80,7 @@ def pmf_hist(a, bins=10):
 
     """
     msg = "This function is deprecated and will be removed in a future version"
-    warnings.warn(msg)
+    warnings.warn(msg, FutureWarning)
     n, x = np.histogram(a, bins)
     h = n / n.sum()
     w = x[1] - x[0]
@@ -184,10 +167,50 @@ def set_hls_values(color, h=None, l=None, s=None):  # noqa
 
 
 def axlabel(xlabel, ylabel, **kwargs):
-    """Grab current axis and label it."""
+    """Grab current axis and label it.
+
+    DEPRECATED: will be removed in a future version.
+
+    """
+    msg = "This function is deprecated and will be removed in a future version"
+    warnings.warn(msg, FutureWarning)
     ax = plt.gca()
     ax.set_xlabel(xlabel, **kwargs)
     ax.set_ylabel(ylabel, **kwargs)
+
+
+def remove_na(vector):
+    """Helper method for removing null values from data vectors.
+
+    Parameters
+    ----------
+    vector : vector object
+        Must implement boolean masking with [] subscript syntax.
+
+    Returns
+    -------
+    clean_clean : same type as ``vector``
+        Vector of data with null values removed. May be a copy or a view.
+
+    """
+    return vector[pd.notnull(vector)]
+
+
+def get_color_cycle():
+    """Return the list of colors in the current matplotlib color cycle
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    colors : list
+        List of matplotlib colors in the current cycle, or dark gray if
+        the current color cycle is empty.
+    """
+    cycler = mpl.rcParams['axes.prop_cycle']
+    return cycler.by_key()['color'] if 'color' in cycler.keys else [".15"]
 
 
 def despine(fig=None, ax=None, top=True, right=True, left=False,
@@ -321,7 +344,7 @@ def percentiles(a, pcts, axis=None):
 
     """
     msg = "This function is deprecated and will be removed in a future version"
-    warnings.warn(msg)
+    warnings.warn(msg, FutureWarning)
 
     scores = []
     try:
@@ -354,7 +377,7 @@ def sig_stars(p):
 
     """
     msg = "This function is deprecated and will be removed in a future version"
-    warnings.warn(msg)
+    warnings.warn(msg, FutureWarning)
 
     if p < 0.001:
         return "***"
@@ -368,7 +391,14 @@ def sig_stars(p):
 
 
 def iqr(a):
-    """Calculate the IQR for an array of numbers."""
+    """Calculate the IQR for an array of numbers.
+
+    DEPRECATED: will be removed in a future version.
+
+    """
+    msg = "This function is deprecated and will be removed in a future version"
+    warnings.warn(msg, FutureWarning)
+
     a = np.asarray(a)
     q1 = stats.scoreatpercentile(a, 25)
     q3 = stats.scoreatpercentile(a, 75)
@@ -516,45 +546,6 @@ def axes_ticklabels_overlap(ax):
             axis_ticklabels_overlap(ax.get_yticklabels()))
 
 
-def categorical_order(values, order=None):
-    """Return a list of unique data values.
-
-    Determine an ordered list of levels in ``values``.
-
-    Parameters
-    ----------
-    values : list, array, Categorical, or Series
-        Vector of "categorical" values
-    order : list-like, optional
-        Desired order of category levels to override the order determined
-        from the ``values`` object.
-
-    Returns
-    -------
-    order : list
-        Ordered list of category levels not including null values.
-
-    """
-    if order is None:
-        if hasattr(values, "categories"):
-            order = values.categories
-        else:
-            try:
-                order = values.cat.categories
-            except (TypeError, AttributeError):
-                try:
-                    order = values.unique()
-                except AttributeError:
-                    order = pd.unique(values)
-                try:
-                    np.asarray(values).astype(np.float)
-                    order = np.sort(order)
-                except (ValueError, TypeError):
-                    order = order
-        order = filter(pd.notnull, order)
-    return list(order)
-
-
 def locator_to_legend_entries(locator, limits, dtype):
     """Return levels and formatted levels for brief numeric legends."""
     raw_levels = locator.tick_values(*limits).astype(dtype)
@@ -576,23 +567,6 @@ def locator_to_legend_entries(locator, limits, dtype):
     formatted_levels = [formatter(x) for x in raw_levels]
 
     return raw_levels, formatted_levels
-
-
-def get_color_cycle():
-    """Return the list of colors in the current matplotlib color cycle
-
-    Parameters
-    ----------
-    None
-
-    Returns
-    -------
-    colors : list
-        List of matplotlib colors in the current cycle, or dark gray if
-        the current color cycle is empty.
-    """
-    cycler = mpl.rcParams['axes.prop_cycle']
-    return cycler.by_key()['color'] if 'color' in cycler.keys else [".15"]
 
 
 def relative_luminance(color):
